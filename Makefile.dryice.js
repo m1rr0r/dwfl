@@ -137,6 +137,7 @@ console.log('# ace worker ---------');
                     'pilot/fixoldbrowsers',
                     'pilot/event_emitter',
                     'pilot/oop',
+                    'ace/mode/' + mode + '_parser',
                     'ace/mode/' + mode + '_worker'
                 ]
             })

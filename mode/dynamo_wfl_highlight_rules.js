@@ -21,6 +21,157 @@ var dynamo_wflHighlightRules = function() {
         (buildinOperationsStr).split("|")
     );
 
+//var wf = window.DynamoGlobal.parsed;
+//var edl = window.DynamoGlobal.Edl;
+
+    // validation logic
+    var val = {
+        verified_ok : '.val_ok',
+        verified_invalid: '.val_nok',
+        cannot_verify: '.val_unknown',
+
+        getOperation : function(opName) {
+            //console.log('getOperation('+ JSON.stringify(arguments) + ')');
+            if (!window.DynamoGlobal) return;
+            if (!window.DynamoGlobal.parsed) return;
+            if (!opName) return;
+
+            opName = opName.toLowerCase();
+
+            var wf = window.DynamoGlobal.parsed;
+            //console.log('wf=' + JSON.stringify(wf));
+            return wf[opName];
+        },
+
+        getOperationType : function(opName) {
+            //console.log('getOperationType('+ JSON.stringify(arguments) + ')');
+            var op = val.getOperation(opName);
+            if (!op) return;
+            return op.__type || opName;
+        },
+
+        getOperationDescriptor : function(opName) {
+            var opType = val.getOperationType(opName);
+            if (!opType) return;
+            if (!window.DynamoGlobal.Operations) return;
+
+            return window.DynamoGlobal.Operations[opType];
+        },
+
+        getOperationInputEntity : function(opName) {
+            if (!window.DynamoGlobal) return;
+            if (!window.DynamoGlobal.Edl) return;
+
+            var opType = val.getOperationType(opName);
+            if (!opType) return;
+
+            var entityDesigntingAttributePerType = {
+                'fetch': 'entity',
+                'fetchrelated': 'entity',
+                'create': 'entity'
+            };
+
+            if (!entityDesigntingAttributePerType[opType]) return;
+
+            var op = val.getOperation(opName);
+            if (!op) return;
+
+            var entityName = op[entityDesigntingAttributePerType[opType]];
+            if (!entityName) return;
+
+            return window.DynamoGlobal.Edl[entityName];
+        },
+
+        getOperationOutputEntity : function(opName) {
+            if (!window.DynamoGlobal) return;
+            if (!window.DynamoGlobal.Edl) return;
+
+            var opType = val.getOperationType(opName);
+            if (!opType) return;
+
+            var entityDesigntingAttributePerType = {
+                'fetch': 'entity',
+                'fetchrelated': 'entity'
+            };
+
+            if (!entityDesigntingAttributePerType[opType]) return;
+
+            var op = val.getOperation(opName);
+            if (!op) return;
+
+            var entityName = op[entityDesigntingAttributePerType[opType]];
+            if (!entityName) return;
+
+            return window.DynamoGlobal.Edl[entityName];
+        },
+
+        checkValidOperation : function(opName) {
+            if (!window.DynamoGlobal) return;
+            if (!window.DynamoGlobal.parsed) return;
+
+            var op = val.getOperation(opName);
+            if (op) return val.verified_ok;
+            return val.verified_invalid;
+        },
+
+        checkValidInputArgument : function(opName, argName) {
+            // Check build-in operation arguments
+            var opDescriptor = val.getOperationDescriptor(opName);
+            if (opDescriptor) {
+                var signature = opDescriptor[argName];
+                if (signature) {
+                    if (signature === 1) return val.verified_ok;
+                    if (signature === 3) return val.verified_ok;
+                }
+            }
+
+            // Check if operation accepts entity properties as result args
+            var entity = val.getOperationInputEntity(opName);
+            if (entity) {
+                if (entity[argName]) return val.verified_ok;
+                return val.verified_invalid;
+            }
+
+            return; // undefined -- cannot determine
+        },
+
+        checkValidOutputArgument : function(opName, argName) {
+            if (!argName) return;
+            argName = argName.toLowerCase();
+
+            // Check build-in operation arguments
+            var opDescriptor = val.getOperationDescriptor(opName);
+            if (opDescriptor) {
+                var signature = opDescriptor[argName];
+                if (signature) {
+                    if (signature === 2) return val.verified_ok;
+                    if (signature === 3) return val.verified_ok;
+                }
+            }
+
+            // Check the operation itself
+            var op = val.getOperation(opName);
+            //console.log('aa');
+            if (op) {
+                //console.log('op=' + JSON.stringify(op));
+                //console.log('argName=' + argName);
+                //console.log('op[argName]=' + op[argName]);
+                if (op[argName]) return val.verified_ok;
+            }
+
+            // Check if operation returns entity properties as result args
+            var entity = val.getOperationOutputEntity(opName);
+            if (entity) {
+                //console.log('entity=' + JSON.stringify(entity));
+                if (entity[argName]) return val.verified_ok;
+                return val.verified_invalid;
+            }
+
+            return; // undefined -- cannot determine
+        }
+
+    };
+
     // regexp must not have capturing parentheses. Use (?:) instead.
     // regexps are ordered -> the first match is used
 
@@ -56,24 +207,11 @@ var dynamo_wflHighlightRules = function() {
                         var kindOp = "identifier";
                         var kindOutArg = "identifier";
 
-                        if (window.DynamoGlobal && window.DynamoGlobal.parsed) {
-                            var wf = window.DynamoGlobal.parsed;
-                            var edl = window.DynamoGlobal.Edl;
-                            if (!wf[op]) {
-                                kindOp = "invalid";
-                            } else if (edl) {
-                                var entity = wf[op]['Entity'];
-                                if (entity) {
-                                    var es = edl[entity];
-                                    if (es) {
-                                        if (!es[outarg]) {
-                                            kindOutArg = "invalid";
-                                        }
-                                    }
-                                }
-                            }
-                            console.log(JSON.stringify(window.DynamoGlobal.parsed));
-                        }
+                        kindOp += (val.checkValidOperation(op) || val.cannot_verify);
+                        kindOutArg += (val.checkValidOutputArgument(op, outarg) || val.cannot_verify);
+
+                        //console.log("kindOp=" + kindOp);
+                        //console.log("kindOutArg=" + kindOutArg);
 
                         return [kindOp, "keyword.operator", kindOutArg];
                     },
