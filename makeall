@@ -1,0 +1,2 @@
+cp mode/* support/ace/lib/ace/mode/
+node Makefile.dryice.js
